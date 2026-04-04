@@ -47,7 +47,7 @@ If you prefer to set things up step by step instead of using the script:
 
 ```bash
 # 1. Clone the repo
-git clone <your-repo-url>
+git clone https://github.com/alanwaivy10/webT/ 
 cd web-terminal
 
 # 2. Install dependencies

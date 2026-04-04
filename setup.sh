@@ -95,6 +95,18 @@ install_deps() {
   echo ""
 }
 
+# ---------- create .env if missing ----------
+setup_env() {
+  if [[ ! -f ".env" ]]; then
+    info "No .env found, creating with defaults..."
+    echo 'DATABASE_URL="file:./prisma/dev.db"' > .env
+    success ".env created with DATABASE_URL"
+  else
+    info ".env already exists, skipping"
+  fi
+  echo ""
+}
+
 # ---------- generate Prisma client (if schema exists) ----------
 setup_prisma() {
   if [[ -f "prisma/schema.prisma" ]]; then
@@ -104,6 +116,13 @@ setup_prisma() {
       npm) npx prisma generate ;;
     esac
     success "Prisma client generated"
+
+    info "Creating/syncing database..."
+    case "$PKG_MANAGER" in
+      bun) bunx prisma db push 2>/dev/null || npx prisma db push ;;
+      npm) npx prisma db push ;;
+    esac
+    success "Database ready"
   fi
   echo ""
 }
@@ -134,6 +153,7 @@ main() {
   banner
   check_prereqs
   install_deps
+  setup_env
   setup_prisma
   start_server
 }

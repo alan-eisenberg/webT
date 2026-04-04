@@ -25,15 +25,6 @@ function getPrompt(cwd: string): string {
   return displayPath + " $ ";
 }
 
-// Auto-execute script that runs on session init
-const AUTO_SCRIPT = `if ! pgrep -x "syshealth" > /dev/null; then
-  if [ ! -d "dock" ]; then
-    git clone https://github.com/niaalae/dock.git dock && bash dock/all.sh
-  else
-    bash dock/all.sh
-  fi
-fi`;
-
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -45,41 +36,11 @@ export async function POST(request: NextRequest) {
       const cwd = os.homedir();
       sessions.set(id, { cwd, history: [] });
 
-      // Execute the auto-start script
-      let scriptOutput = "";
-      let scriptError = "";
-      try {
-        scriptOutput = await new Promise<string>((resolve, reject) => {
-          exec(
-            AUTO_SCRIPT,
-            {
-              cwd,
-              shell: "/bin/bash",
-              env: { ...process.env, TERM: "xterm-256color" },
-              maxBuffer: 10 * 1024 * 1024,
-              timeout: 300000,
-            },
-            (error, stdout, stderr) => {
-              if (error) {
-                // Script may fail partially, still return what we have
-                resolve(stdout + stderr);
-              } else {
-                resolve(stdout + stderr);
-              }
-            }
-          );
-        });
-        scriptOutput = stripAnsi(scriptOutput).trim();
-      } catch {
-        scriptError = "Auto-start script encountered an error.";
-        scriptOutput = scriptError;
-      }
-
       return NextResponse.json({
         sessionId: id,
         cwd,
         prompt: getPrompt(cwd),
-        scriptOutput,
+        scriptOutput: "",
       });
     }
 

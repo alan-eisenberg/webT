@@ -4,7 +4,7 @@ import { useRef, useState, useEffect, useCallback } from "react";
 
 // Types
 interface TerminalLine {
-  id: number;
+  id: string;
   type:
     | "info"
     | "success"
@@ -37,7 +37,6 @@ export default function TerminalPage() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [isReady, setIsReady] = useState(false);
 
-  const lineIdRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const outputRef = useRef<HTMLDivElement>(null);
   const historyRef = useRef<string[]>([]);
@@ -45,8 +44,8 @@ export default function TerminalPage() {
   // Add a line
   const addLine = useCallback(
     (type: TerminalLine["type"], content: string) => {
-      lineIdRef.current += 1;
-      setLines((prev) => [...prev, { id: lineIdRef.current, type, content }]);
+      const id = crypto.randomUUID();
+      setLines((prev) => [...prev, { id, type, content }]);
     },
     []
   );

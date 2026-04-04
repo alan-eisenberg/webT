@@ -1,18 +1,13 @@
 {
   "name": "web-terminal",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Web-based terminal emulator built with Next.js 16, TypeScript, and Tailwind CSS 4",
   "scripts": {
-    "setup": "bash setup.sh",
-    "dev": "next dev -p 3000",
+    "dev": "next dev -p 3000 -H 0.0.0.0",
     "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
     "start": "NODE_ENV=production node .next/standalone/server.js",
     "lint": "eslint .",
-    "db:push": "prisma db push",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:reset": "prisma migrate reset"
+    "setup": "bash setup.sh"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

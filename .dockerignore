@@ -1,0 +1,76 @@
+# =============================================================================
+# Web Terminal — Docker Ignore
+# Reduces build context size by excluding unnecessary files
+# =============================================================================
+
+# Dependencies (installed fresh inside container)
+node_modules/
+
+# Build output
+.next/
+out/
+build/
+dist/
+
+# Git
+.git/
+.gitignore
+
+# Docker files
+Dockerfile
+docker-compose.yml
+docker-compose.override.yml
+.dockerignore
+
+# Logs
+*.log
+logs/
+
+# Documentation (not needed in image)
+README.md
+*.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env*
+!.env.example
+
+# Database
+db/*.db
+db/*.db-journal
+
+# Prisma migrations (handled by db:push)
+prisma/migrations/
+
+# PM2
+ecosystem.config.js
+.pm2/
+
+# Deployment configs (not needed in image)
+setup.sh
+nginx.conf.example
+web-terminal.service
+
+# Download/output artifacts
+download/
+
+# Test & coverage
+test/
+coverage/
+
+# Project scaffold artifacts
+examples/
+skills/
+.zscripts/
+.claude
+.z-ai-config
+worklog.md

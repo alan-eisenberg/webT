@@ -1,7 +1,5 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-node_modules
+# Dependencies
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -10,67 +8,73 @@ node_modules
 !.yarn/releases
 !.yarn/versions
 
-# testing
-/coverage
-
-# next.js
-/.next/
+# Build output
+.next/
 /out/
+/build/
+dist/
 
-# production
-/build
+# Environment files
+.env*
+!.env.example
 
-# misc
-.DS_Store
-*.pem
+# Logs
+*.log
+logs/*
+!logs/.gitkeep
+dev.log
+dev.out.log
+server.log
 
-# debug
+# Debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files
-.env*
-!.env.example
+# OS files
+.DS_Store
+Thumbs.db
 
-# vercel
+# Certificates
+*.pem
+
+# Vercel
 .vercel
 
-# typescript
+# TypeScript
 *.tsbuildinfo
 next-env.d.ts
 
-# logs
-*.log
-dev.log
-dev.out.log
-server.log
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
-# ---------- project-specific ----------
-
-# Dev environment files (not part of the repo)
-.zscripts/
-.z-ai-config
-worklog.md
-
-# Database files
+# Database
 db/*.db
 db/*.db-journal
 
-# Download / generated output
-/download/
+# Prisma
+prisma/migrations/
 
-# Skills (AI dev environment)
-/skills/
-
-# Claude / AI assistant files
-.claude
-local-*
-
-# Caddy (reverse proxy, dev only)
-Caddyfile
-
-# Test / temp
-test
+# Project-specific
+download/
+test/
 prompt
+local-*
+.claude
+.z-ai-config
+.zscripts/
+skills/
+
+# Docker
+docker-compose.override.yml
+
+# Coverage
+coverage/
+
+# PM2
+.pm2/

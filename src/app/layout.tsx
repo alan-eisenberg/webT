@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   title: "Terminal — bash",
   description: "Web-based terminal emulator",
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⬛</text></svg>",
   },
 };
 
@@ -22,7 +22,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geistMono.variable} antialiased`}>
+      <body
+        className={`${geistMono.variable} antialiased`}
+        style={{ margin: 0, padding: 0, overflow: 'hidden', backgroundColor: '#0d1117' }}
+      >
         {children}
       </body>
     </html>

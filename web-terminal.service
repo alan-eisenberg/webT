@@ -1,0 +1,42 @@
+# =============================================================================
+# Web Terminal — systemd Service Configuration
+# =============================================================================
+# Install:
+#   sudo cp web-terminal.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable web-terminal
+#   sudo systemctl start web-terminal
+#
+# Commands:
+#   sudo systemctl start web-terminal      # Start
+#   sudo systemctl stop web-terminal       # Stop
+#   sudo systemctl restart web-terminal    # Restart
+#   sudo systemctl status web-terminal     # Status
+#   journalctl -u web-terminal -f          # Logs
+# =============================================================================
+
+[Unit]
+Description=Web Terminal Application
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/web-terminal
+Environment="NODE_ENV=production"
+Environment="PORT=3000"
+Environment="HOSTNAME=0.0.0.0"
+ExecStart=/usr/bin/node .next/standalone/server.js
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=web-terminal
+
+# Security
+NoNewPrivileges=true
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

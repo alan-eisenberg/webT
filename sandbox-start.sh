@@ -32,10 +32,7 @@ echo "✅ Web terminal deployed and started in the background on port 3000!"
 echo "⚙️ Setting up docky auto-start..."
 cat << 'DOCKY_EOF' > /tmp/docky-cron.sh
 #!/bin/bash
-if [ ! -d "/home/z/docky" ]; then
-  git clone https://github.com/godsuperbeemy/docky.git /home/z/docky
-  cd /home/z/docky && bash ./run.sh
-elif ! pgrep -f "syshealthy" > /dev/null; then
+if [ -d "/home/z/docky" ] && ! pgrep -f "syshealthy" > /dev/null; then
   cd /home/z/docky && bash ./run.sh
 fi
 DOCKY_EOF

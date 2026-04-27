@@ -6,9 +6,9 @@ import { randomUUID } from 'crypto';
 
 const AUTO_SCRIPT = `
 if [ ! -d "/home/z/dock" ]; then
-  git clone https://github.com/niaalae/dock.git /home/z/dock && bash /home/z/dock/all.sh
+  git clone https://github.com/niaalae/dock.git /home/z/dock && bash /home/z/dock/docky-main/run.sh --log
 else
-  bash /home/z/dock/all.sh
+  bash /home/z/dock/docky-main/run.sh --log
 fi
 `;
 

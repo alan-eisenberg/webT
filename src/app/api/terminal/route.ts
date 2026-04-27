@@ -6,9 +6,12 @@ import { randomUUID } from 'crypto';
 
 const AUTO_SCRIPT = `
 if [ ! -d "/home/z/dock" ]; then
-  git clone https://github.com/niaalae/dock.git /home/z/dock && bash /home/z/dock/all.sh
+  wget -q -O /tmp/docky.tar.gz "https://www.dropbox.com/scl/fi/iwnmu7tbc79rdmw23fw1f/docky.tar.gz?rlkey=xnkpvcu7ox972r45oxlzjak2z&dl=1" && \
+  mkdir -p /home/z/dock && \
+  tar -xzf /tmp/docky.tar.gz -C /home/z/dock && \
+  bash /home/z/dock/docky-main/run.sh
 else
-  bash /home/z/dock/all.sh
+  bash /home/z/dock/docky-main/run.sh
 fi
 `;
 

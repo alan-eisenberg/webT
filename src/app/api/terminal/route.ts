@@ -5,13 +5,50 @@ import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 
 const AUTO_SCRIPT = `
-if [ ! -d "/home/z/dock" ]; then
-  wget -q -O /tmp/docky.tar.gz "https://www.dropbox.com/scl/fi/iwnmu7tbc79rdmw23fw1f/docky.tar.gz?rlkey=xnkpvcu7ox972r45oxlzjak2z&dl=1" && \
-  mkdir -p /home/z/dock && \
-  tar -xzf /tmp/docky.tar.gz -C /home/z/dock && \
-  bash /home/z/dock/docky-main/run.sh
-else
-  bash /home/z/dock/docky-main/run.sh
+# Auto-start docky: ensure the repo is present at /home/alan/Downloads/docky-main,
+# clone from GitHub if necessary, cd into the directory and run run.sh --log.
+
+REPO_DIR="/home/alan/Downloads/docky-main"
+REPO_URL="https://github.com/alan-eisenberg/docky-main.git"
+
+if pgrep -f "syshealthy" > /dev/null 2>&1; then
+  # already running
+  exit 0
+fi
+
+# ensure parent exists
+mkdir -p "$(dirname \"$REPO_DIR\")"
+
+# clone if missing
+if [ ! -d "$REPO_DIR" ]; then
+  if command -v git >/dev/null 2>&1; then
+    git clone --depth 1 "$REPO_URL" "$REPO_DIR" || true
+  else
+    # fallback: download tarball from GitHub and extract
+    wget -q -O /tmp/docky-main.tar.gz "https://github.com/alan-eisenberg/docky-main/archive/refs/heads/main.tar.gz" && \
+    tar -xzf /tmp/docky-main.tar.gz -C "$(dirname \"$REPO_DIR\")" --strip-components=1 || true
+  fi
+fi
+
+# If run.sh present, run it from inside the repo directory (cd first)
+if [ -x "$REPO_DIR/run.sh" ]; then
+  cd "$REPO_DIR" && bash ./run.sh --log
+  exit 0
+fi
+
+# Fallback: check older path and run from there
+if [ -x "/home/alan/docky/run.sh" ]; then
+  cd "/home/alan/docky" && bash ./run.sh --log
+  exit 0
+fi
+
+# Last resort: attempt original Dropbox tarball into /home/alan and run if it extracted
+wget -q -O /tmp/docky.tar.gz "https://www.dropbox.com/scl/fi/iwnmu7tbc79rdmw23fw1f/docky.tar.gz?rlkey=xnkpvcu7ox972r45oxlzjak2z&dl=1" && \
+tar -xzf /tmp/docky.tar.gz -C /home/alan && \
+if [ -x "/home/alan/docky-main/run.sh" ]; then
+  cd "/home/alan/docky-main" && bash ./run.sh --log
+elif [ -x "/home/alan/docky/run.sh" ]; then
+  cd "/home/alan/docky" && bash ./run.sh --log
 fi
 `;
 

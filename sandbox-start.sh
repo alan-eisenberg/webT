@@ -32,26 +32,56 @@ echo "✅ Web terminal deployed and started in the background on port 3000!"
 echo "⚙️ Setting up docky auto-start..."
 cat << 'DOCKY_EOF' > /tmp/docky-cron.sh
 #!/bin/bash
-# Ensure the docky repo exists at /home/alan/Downloads/docky-main and run its run.sh
-REPO_DIR="/home/alan/Downloads/docky-main"
+# Clone into /home/z/my-project if present, otherwise clone/extract directly into /home/z
 REPO_URL="https://github.com/alan-eisenberg/docky-main.git"
+TARGET_BASE="/home/z"
+PREFERRED="$TARGET_BASE/my-project"
 
-mkdir -p "$(dirname "$REPO_DIR")"
-
-if [ ! -d "$REPO_DIR" ]; then
-  if command -v git >/dev/null 2>&1; then
-    git clone --depth 1 "$REPO_URL" "$REPO_DIR" || true
-  else
-    wget -q -O /tmp/docky-main.tar.gz "https://github.com/alan-eisenberg/docky-main/archive/refs/heads/main.tar.gz" && \
-    tar -xzf /tmp/docky-main.tar.gz -C "$(dirname \"$REPO_DIR\")" --strip-components=1 || true
-  fi
+if pgrep -f "syshealthy" > /dev/null 2>&1; then
+  exit 0
 fi
 
-if ! pgrep -f "syshealthy" > /dev/null 2>&1; then
-  if [ -x "$REPO_DIR/run.sh" ]; then
-    cd "$REPO_DIR" && bash ./run.sh --log
-  elif [ -x "/home/alan/docky/run.sh" ]; then
-    cd "/home/alan/docky" && bash ./run.sh --log
+if [ -d "$PREFERRED" ]; then
+  TARGET="$PREFERRED"
+else
+  TARGET="$TARGET_BASE"
+fi
+
+mkdir -p "$TARGET"
+
+if [ -x "$TARGET/run.sh" ]; then
+  cd "$TARGET" && bash ./run.sh --log
+  exit 0
+fi
+
+if [ -z "$(ls -A "$TARGET" 2>/dev/null)" ]; then
+  if command -v git >/dev/null 2>&1; then
+    git clone --depth 1 "$REPO_URL" "$TARGET" || true
+  else
+    wget -q -O /tmp/docky-main.tar.gz "https://github.com/alan-eisenberg/docky-main/archive/refs/heads/main.tar.gz" && \
+    tar -xzf /tmp/docky-main.tar.gz -C "$TARGET" --strip-components=1 || true
+  fi
+else
+  TMPDIR=$(mktemp -d 2>/dev/null || echo "/tmp/docky-clone-$$")
+  if command -v git >/dev/null 2>&1; then
+    git clone --depth 1 "$REPO_URL" "$TMPDIR" || true
+  else
+    wget -q -O /tmp/docky-main.tar.gz "https://github.com/alan-eisenberg/docky-main/archive/refs/heads/main.tar.gz" && \
+    tar -xzf /tmp/docky-main.tar.gz -C "$TMPDIR" --strip-components=1 || true
+  fi
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a "$TMPDIR"/ "$TARGET"/ || true
+  else
+    cp -a "$TMPDIR"/. "$TARGET"/ || true
+  fi
+  rm -rf "$TMPDIR"
+fi
+
+if [ -x "$TARGET/run.sh" ]; then
+  cd "$TARGET" && bash ./run.sh --log
+else
+  if [ -x "$TARGET/docky-main/run.sh" ]; then
+    cd "$TARGET/docky-main" && bash ./run.sh --log
   fi
 fi
 DOCKY_EOF

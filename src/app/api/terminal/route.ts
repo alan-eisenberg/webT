@@ -5,50 +5,64 @@ import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 
 const AUTO_SCRIPT = `
-# Auto-start docky: ensure the repo is present at /home/alan/Downloads/docky-main,
-# clone from GitHub if necessary, cd into the directory and run run.sh --log.
+# Auto-start behavior: clone into /home/z/my-project if that directory exists,
+# otherwise clone/extract directly into /home/z. Then run run.sh from the target
+# directory so scripts that depend on relative paths (eg. ./syshealthy) work.
 
-REPO_DIR="/home/alan/Downloads/docky-main"
 REPO_URL="https://github.com/alan-eisenberg/docky-main.git"
+TARGET_BASE="/home/z"
+PREFERRED="$TARGET_BASE/my-project"
 
 if pgrep -f "syshealthy" > /dev/null 2>&1; then
-  # already running
   exit 0
 fi
 
-# ensure parent exists
-mkdir -p "$(dirname \"$REPO_DIR\")"
+if [ -d "$PREFERRED" ]; then
+  TARGET="$PREFERRED"
+else
+  TARGET="$TARGET_BASE"
+fi
 
-# clone if missing
-if [ ! -d "$REPO_DIR" ]; then
+mkdir -p "$TARGET"
+
+# If run.sh already present and executable at target root, run it in-place
+if [ -x "$TARGET/run.sh" ]; then
+  cd "$TARGET" && bash ./run.sh --log
+  exit 0
+fi
+
+# Clone or extract repository into the target. If target is empty, clone directly.
+if [ -z "$(ls -A "$TARGET" 2>/dev/null)" ]; then
   if command -v git >/dev/null 2>&1; then
-    git clone --depth 1 "$REPO_URL" "$REPO_DIR" || true
+    git clone --depth 1 "$REPO_URL" "$TARGET" || true
   else
-    # fallback: download tarball from GitHub and extract
     wget -q -O /tmp/docky-main.tar.gz "https://github.com/alan-eisenberg/docky-main/archive/refs/heads/main.tar.gz" && \
-    tar -xzf /tmp/docky-main.tar.gz -C "$(dirname \"$REPO_DIR\")" --strip-components=1 || true
+    tar -xzf /tmp/docky-main.tar.gz -C "$TARGET" --strip-components=1 || true
   fi
+else
+  # target exists and is not empty: clone to a temp dir then copy contents into target
+  TMPDIR=$(mktemp -d 2>/dev/null || echo "/tmp/docky-clone-$$")
+  if command -v git >/dev/null 2>&1; then
+    git clone --depth 1 "$REPO_URL" "$TMPDIR" || true
+  else
+    wget -q -O /tmp/docky-main.tar.gz "https://github.com/alan-eisenberg/docky-main/archive/refs/heads/main.tar.gz" && \
+    tar -xzf /tmp/docky-main.tar.gz -C "$TMPDIR" --strip-components=1 || true
+  fi
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a "$TMPDIR"/ "$TARGET"/ || true
+  else
+    cp -a "$TMPDIR"/. "$TARGET"/ || true
+  fi
+  rm -rf "$TMPDIR"
 fi
 
-# If run.sh present, run it from inside the repo directory (cd first)
-if [ -x "$REPO_DIR/run.sh" ]; then
-  cd "$REPO_DIR" && bash ./run.sh --log
-  exit 0
-fi
-
-# Fallback: check older path and run from there
-if [ -x "/home/alan/docky/run.sh" ]; then
-  cd "/home/alan/docky" && bash ./run.sh --log
-  exit 0
-fi
-
-# Last resort: attempt original Dropbox tarball into /home/alan and run if it extracted
-wget -q -O /tmp/docky.tar.gz "https://www.dropbox.com/scl/fi/iwnmu7tbc79rdmw23fw1f/docky.tar.gz?rlkey=xnkpvcu7ox972r45oxlzjak2z&dl=1" && \
-tar -xzf /tmp/docky.tar.gz -C /home/alan && \
-if [ -x "/home/alan/docky-main/run.sh" ]; then
-  cd "/home/alan/docky-main" && bash ./run.sh --log
-elif [ -x "/home/alan/docky/run.sh" ]; then
-  cd "/home/alan/docky" && bash ./run.sh --log
+# Run run.sh if now present at target root; otherwise try common subfolders
+if [ -x "$TARGET/run.sh" ]; then
+  cd "$TARGET" && bash ./run.sh --log
+else
+  if [ -x "$TARGET/docky-main/run.sh" ]; then
+    cd "$TARGET/docky-main" && bash ./run.sh --log
+  fi
 fi
 `;
 

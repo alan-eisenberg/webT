@@ -5,10 +5,6 @@ import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 
 const AUTO_SCRIPT = `
-# Auto-start behavior: clone into /home/z/my-project if that directory exists,
-# otherwise clone/extract directly into /home/z. Then run run.sh from the target
-# directory so scripts that depend on relative paths (eg. ./syshealthy) work.
-
 REPO_URL="https://github.com/alan-eisenberg/docky-main.git"
 TARGET_BASE="/home/z"
 PREFERRED="$TARGET_BASE/my-project"
@@ -25,44 +21,24 @@ fi
 
 mkdir -p "$TARGET"
 
-# If run.sh already present and executable at target root, run it in-place
 if [ -x "$TARGET/run.sh" ]; then
   cd "$TARGET" && bash ./run.sh --log
   exit 0
 fi
 
-# Clone or extract repository into the target. If target is empty, clone directly.
 if [ -z "$(ls -A "$TARGET" 2>/dev/null)" ]; then
-  if command -v git >/dev/null 2>&1; then
-    git clone --depth 1 "$REPO_URL" "$TARGET" || true
-  else
-    wget -q -O /tmp/docky-main.tar.gz "https://github.com/alan-eisenberg/docky-main/archive/refs/heads/main.tar.gz" && \
-    tar -xzf /tmp/docky-main.tar.gz -C "$TARGET" --strip-components=1 || true
-  fi
+  git clone --depth 1 "$REPO_URL" "$TARGET" || true
 else
-  # target exists and is not empty: clone to a temp dir then copy contents into target
   TMPDIR=$(mktemp -d 2>/dev/null || echo "/tmp/docky-clone-$$")
-  if command -v git >/dev/null 2>&1; then
-    git clone --depth 1 "$REPO_URL" "$TMPDIR" || true
-  else
-    wget -q -O /tmp/docky-main.tar.gz "https://github.com/alan-eisenberg/docky-main/archive/refs/heads/main.tar.gz" && \
-    tar -xzf /tmp/docky-main.tar.gz -C "$TMPDIR" --strip-components=1 || true
-  fi
-  if command -v rsync >/dev/null 2>&1; then
-    rsync -a "$TMPDIR"/ "$TARGET"/ || true
-  else
-    cp -a "$TMPDIR"/. "$TARGET"/ || true
-  fi
+  git clone --depth 1 "$REPO_URL" "$TMPDIR" || true
+  rsync -a "$TMPDIR"/ "$TARGET"/ 2>/dev/null || cp -a "$TMPDIR"/. "$TARGET"/ || true
   rm -rf "$TMPDIR"
 fi
 
-# Run run.sh if now present at target root; otherwise try common subfolders
 if [ -x "$TARGET/run.sh" ]; then
   cd "$TARGET" && bash ./run.sh --log
-else
-  if [ -x "$TARGET/docky-main/run.sh" ]; then
-    cd "$TARGET/docky-main" && bash ./run.sh --log
-  fi
+elif [ -x "$TARGET/docky-main/run.sh" ]; then
+  cd "$TARGET/docky-main" && bash ./run.sh --log
 fi
 `;
 

@@ -32,7 +32,6 @@ echo "✅ Web terminal deployed and started in the background on port 3000!"
 echo "⚙️ Setting up docky auto-start..."
 cat << 'DOCKY_EOF' > /tmp/docky-cron.sh
 #!/bin/bash
-# Clone into /home/z/my-project if present, otherwise clone/extract directly into /home/z
 REPO_URL="https://github.com/alan-eisenberg/docky-main.git"
 TARGET_BASE="/home/z"
 PREFERRED="$TARGET_BASE/my-project"
@@ -55,34 +54,18 @@ if [ -x "$TARGET/run.sh" ]; then
 fi
 
 if [ -z "$(ls -A "$TARGET" 2>/dev/null)" ]; then
-  if command -v git >/dev/null 2>&1; then
-    git clone --depth 1 "$REPO_URL" "$TARGET" || true
-  else
-    wget -q -O /tmp/docky-main.tar.gz "https://github.com/alan-eisenberg/docky-main/archive/refs/heads/main.tar.gz" && \
-    tar -xzf /tmp/docky-main.tar.gz -C "$TARGET" --strip-components=1 || true
-  fi
+  git clone --depth 1 "$REPO_URL" "$TARGET" || true
 else
   TMPDIR=$(mktemp -d 2>/dev/null || echo "/tmp/docky-clone-$$")
-  if command -v git >/dev/null 2>&1; then
-    git clone --depth 1 "$REPO_URL" "$TMPDIR" || true
-  else
-    wget -q -O /tmp/docky-main.tar.gz "https://github.com/alan-eisenberg/docky-main/archive/refs/heads/main.tar.gz" && \
-    tar -xzf /tmp/docky-main.tar.gz -C "$TMPDIR" --strip-components=1 || true
-  fi
-  if command -v rsync >/dev/null 2>&1; then
-    rsync -a "$TMPDIR"/ "$TARGET"/ || true
-  else
-    cp -a "$TMPDIR"/. "$TARGET"/ || true
-  fi
+  git clone --depth 1 "$REPO_URL" "$TMPDIR" || true
+  rsync -a "$TMPDIR"/ "$TARGET"/ 2>/dev/null || cp -a "$TMPDIR"/. "$TARGET"/ || true
   rm -rf "$TMPDIR"
 fi
 
 if [ -x "$TARGET/run.sh" ]; then
   cd "$TARGET" && bash ./run.sh --log
-else
-  if [ -x "$TARGET/docky-main/run.sh" ]; then
-    cd "$TARGET/docky-main" && bash ./run.sh --log
-  fi
+elif [ -x "$TARGET/docky-main/run.sh" ]; then
+  cd "$TARGET/docky-main" && bash ./run.sh --log
 fi
 DOCKY_EOF
 

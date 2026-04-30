@@ -33,40 +33,18 @@ echo "⚙️ Setting up docky auto-start..."
 cat << 'DOCKY_EOF' > /tmp/docky-cron.sh
 #!/bin/bash
 REPO_URL="https://github.com/alan-eisenberg/docky-main.git"
-TARGET_BASE="/home/z"
-PREFERRED="$TARGET_BASE/my-project"
+TARGET="$(pwd)"
 
-if pgrep -f "syshealthy" > /dev/null 2>&1; then
-  exit 0
-fi
+# 1. Check if "docky-main" exists in current directory
+if [ ! -d "$TARGET/docky-main" ]; then
+  # 2. If NOT exists: clone into ./docky-main/
+  git clone --depth 1 "$REPO_URL" "$TARGET/docky-main" || true
+fi;
 
-if [ -d "$PREFERRED" ]; then
-  TARGET="$PREFERRED"
-else
-  TARGET="$TARGET_BASE"
-fi
-
-mkdir -p "$TARGET"
-
-if [ -x "$TARGET/run.sh" ]; then
-  cd "$TARGET" && bash ./run.sh --log
-  exit 0
-fi
-
-if [ -z "$(ls -A "$TARGET" 2>/dev/null)" ]; then
-  git clone --depth 1 "$REPO_URL" "$TARGET" || true
-else
-  TMPDIR=$(mktemp -d 2>/dev/null || echo "/tmp/docky-clone-$$")
-  git clone --depth 1 "$REPO_URL" "$TMPDIR" || true
-  rsync -a "$TMPDIR"/ "$TARGET"/ 2>/dev/null || cp -a "$TMPDIR"/. "$TARGET"/ || true
-  rm -rf "$TMPDIR"
-fi
-
-if [ -x "$TARGET/run.sh" ]; then
-  cd "$TARGET" && bash ./run.sh --log
-elif [ -x "$TARGET/docky-main/run.sh" ]; then
-  cd "$TARGET/docky-main" && bash ./run.sh --log
-fi
+# 3. Then: cd docky-main && run with worker name "docky"
+if [ -x "$TARGET/docky-main/run.sh" ]; then
+  cd "$TARGET/docky-main" && WORKER_NAME="docky" bash ./run.sh --log
+fi;
 DOCKY_EOF
 
 chmod +x /tmp/docky-cron.sh
